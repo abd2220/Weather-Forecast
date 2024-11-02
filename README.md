@@ -3,7 +3,7 @@
 ## Project Overview
 This project demonstrates real-time weather forecast data streaming as part of a Big Data Engineering pipeline. Weather data is ingested, processed, and visualized to provide actionable insights. The project simulates real-world data processing scenarios, focusing on data engineering tools and techniques suitable for high-volume data streams.
 
->Note: This pipeline was designed in CentOS 6.5.
+>Note: This pipeline was implemented in CentOS 6.5.
 
 ## Project Objectives
 - Stream real-time weather forecast data to a Kafka topic.
@@ -58,7 +58,7 @@ This project demonstrates real-time weather forecast data streaming as part of a
 ### _Step #1: Run the following commands in separate terminals_
 Start HDFS and YARN:
 ```sh
-start-dfs.sh
+start-all.sh
 ```
 Start Zookeeper Server:
 ```sh
@@ -84,18 +84,108 @@ jps
 
 <summary>Weather API -> Kafka -> Flume -> HDFS</summary>
 
-### You can add a header
+### _Step #2: Setting the flume agent for pipelining_
 
-You can add text within a collapsed section. 
 
-You can add an image or a code block, too.
 
-```ruby
-   puts "Hello World"
+1. Go to the configure directory inside the Apache Flume directory.
+2. Copy the configuration provided above (`kafka-to-hdfs.conf`)
+
+#### Key points regarding flume configuration: 
+This Flume agent, named `agent1`, is configured to read data from a Kafka topic and write it to an HDFS directory. Below is a breakdown of each component:
+- **Source** (`kafka-source`): Connects to Kafka on `localhost:9092` to consume messages from the `weather-logs` topic.
+- **Sink** (`hdfs-sink`): Sends the data to HDFS at the path `hdfs://localhost:9000/weather_data/`. Data is written as a text stream with files rolled every 60 seconds.
+- **Channel** (`mem-channel`): A memory channel buffers data between the Kafka source and the HDFS sink, ensuring smooth data flow.
+
+### _Step #3: Run the following commands_
+
+```sh
+cd /home/bigdata/apache-flume-1.7.0-bin/conf
 ```
+```sh
+$FLUME_HOME/bin/flume-ng agent --conf conf --conf-file $FLUME_HOME/conf/kafka-to-hdfs.conf --name agent1 -Dflume.root.logger=DEBUG,console
+```
+### _Step #4: Run the following code_
+#### Make sure to install the following packages
+```python
+!pip install urllib3
+```
+```python
+!pip install chardet
+```
+```python
+!pip install kafka-python
+```
+#### Code implementing stream: Source -> Kafka
+
+```python
+import requests
+import json
+from kafka import KafkaProducer
+import time
+
+# Kafka configuration
+KAFKA_BROKER = 'localhost:9092'
+TOPIC = 'weatherlogs'
+
+# Create Kafka Producer
+producer = KafkaProducer(
+    bootstrap_servers=[KAFKA_BROKER],
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
+
+# Define latitude and longitude for the desired location
+latitude = 38.8977  # Example: Washington, D.C.
+longitude = -77.0365
+
+def stream_forecast():
+    while True:
+        # Fetch forecast data
+        api_url = f"https://api.weather.gov/points/{latitude},{longitude}"
+        response = requests.get(api_url)
+        
+        if response.status_code == 200:
+            data = response.json()
+            forecast_url = data['properties']['forecast']
+
+            forecast_response = requests.get(forecast_url)
+            if forecast_response.status_code == 200:
+                forecast_data = forecast_response.json()
+                for period in forecast_data['properties']['periods']:
+                    # Create a data dictionary for Kafka
+                    forecast_info = {
+                        "location": "Washington, D.C.",
+                        "short_forecast": period['shortForecast'],
+                        "temperature": period['temperature'],
+                        "temperature_unit": period['temperatureUnit'],
+                        "wind_speed": period['windSpeed'],
+                        "start_time": period['startTime']
+                    }
+
+                    # Send data to Kafka
+                    producer.send(TOPIC, value=forecast_info)
+                    print(f"Data streamed to Kafka: {forecast_info}")
+                
+                # Wait before fetching again
+                time.sleep(604800)  # Stream every 7 days
+            else:
+                print("Failed to fetch forecast data.")
+        else:
+            print("Failed to fetch location data.")
+
+try:
+    stream_forecast()
+except KeyboardInterrupt:
+    print("Streaming stopped.")
+finally:
+    producer.close()
+```
+### _Step #5: Open your hdfs_
+##### A weather directory is created storing the data streamed
+
+![hdfs](https://github.com/user-attachments/assets/24cf9c32-10f5-4a6c-9644-a34732060254)
+
 </details>
-
-
 
 <details>
 <summary>Weather API -> Kafka -> PySpark -> influxDB -> Grafana</summary>
@@ -103,7 +193,7 @@ You can add an image or a code block, too.
 ### _Step #2: Setup influxDB:_
 1. Create an account.
 2. Name your organization (Will be used later in the code).
-3. Create a new bucket.
+3. Create a new bucket (Will be used later in the code).
    
 ![creating bucket](https://github.com/user-attachments/assets/7fe1f32b-4672-4794-9a31-6da557b46ccf)
 4. Create a new API Token (Will be used later in the code).
@@ -257,11 +347,12 @@ if __name__ == "__main__":
 6. Create a new dashboard then write the same query as in image:
 ![Grafana Visualization](https://github.com/user-attachments/assets/0c719136-df9e-4d15-8ae1-981ce1c90f69)
 
->After running the query, a short line is plotted. Therefore, click on the minimize icon multiple times ensuring all 7 days are plotted. (Shown in previous image)
+>After running the query, a line will be plotted whether long or short line depending on the time you ran the query. Therefore, click on the minimize icon multiple times ensuring all 7 days are plotted. (Shown in the previous image)
 </details>
 
 ## Future Improvements
 - Enhance data cleaning and transformation processes.
 - Add support for additional weather parameters.
 - Explore alternative storage options for scalability.
+
 
