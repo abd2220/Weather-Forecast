@@ -21,7 +21,8 @@ This project demonstrates real-time weather forecast data streaming as part of a
 - **Visualization**: Grafana for monitoring forecast trends.
 
 ## Architecture Diagram
-> *(Optional) Add an architecture diagram to illustrate the data flow between each component in your pipeline.*
+![weather forecast](https://github.com/user-attachments/assets/6283c8f6-5242-4a7a-a2a7-8f76fa338713)
+
 
 ## Tools and Technologies
 - **Kafka**: For real-time data streaming.
